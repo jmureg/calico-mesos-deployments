@@ -23,7 +23,9 @@ run with a Docker version 1.9 or higher, and to configure Docker to use a
 cluster store.  We'll set up an etcd datastore which will be used by Docker and
 Calico.
 
-#### Install etcd
+It is important to install the following steps for etcd configuration, calico/mesos installation and address pool configuration on each host involved in the multi-host cluster. 
+
+#### Install etcd on each host machine
 
 Set up an etcd cluster.  For initial testing we’d recommend starting with a
 single-node cluster on one of your master nodes.
@@ -43,17 +45,18 @@ sudo docker run --detach --name etcd --net host -v /var/etcd:/data quay.io/coreo
 
 replacing `<IP Address>` with the server IP address.
 
-#### Set up Docker daemon to use etcd as a cluster store
+#### Set up Docker daemon to use etcd as a cluster store on each host machine
 
 On each agent:
 -  Stop your docker service.
 -  If you don’t already have at least Docker 1.9 then upgrade/install Docker
    1.9 or higher.
 -  Modify the docker daemon parameters to include:
-   `--cluster-store=etcd://<ip address>:4001`
+   `--cluster-store=etcd://<ip address>:4001` e.g.
+   `echo "DOCKER_OPTS=--cluster-store=etcd://<etcd ip address>:2379" | tee -a /etc/default/docker`
 -  Start your docker service.
 
-## Install and set up Calico
+## Install and set up Calico on each host machine
 
 #### Install Calico on each agent
 
@@ -115,11 +118,11 @@ $ ./calicoctl pool show
 ## Creating a Docker network and managing network policy
 
 With Calico, a Docker network represents a logical set of rules that define the 
-allowed traffic in and out of containers assigned to that network.  The rules
-are encapsulated in a Calico "profile".  Each Docker network is assigned its 
+allowed traffic in and out of containers assigned to that network. The rules
+are encapsulated in a Calico "profile". Each Docker network is assigned its 
 own Calico profile.
 
-#### Create a Docker network
+#### Create a Docker network on one machine
 
 To create a Docker network using Calico, run the `docker network create`
 command specifying "calico" as both the network and IPAM driver.  For example,
@@ -144,6 +147,27 @@ c36ddf3b
 ```
 
 >  This example uses shortened network IDs for clarity.
+
+#### Verify a Docker network on another machine
+The network installed on one machine is transferred on other machines in the multi-host environment via Calico. 
+
+For example,
+to verify a new instantiated network called `data-tier` on other hosts in the Calico network run the following command:
+
+```
+docker network ls 
+```
+The resulting list should contain the new Calico network next to the three standard docker networks plus other networks eventually.
+
+```
+# docker network ls
+NETWORK ID          NAME                DRIVER
+<new network id>    data-tier           calico
+...
+<network id>        bridge              bridge
+<network id>        none                null
+<network id>        host                host
+```
 
 #### Networks and Calico Profiles
 
@@ -237,6 +261,7 @@ Where `<network name>` is the name of the network, for example "data-tier".
 To launch a container using the Marathon API with a JSON blob, simply include
 the net parameter in the request.  For example:
 
+
 ```
 {
     "id":"/calico-apps",
@@ -259,6 +284,13 @@ the net parameter in the request.  For example:
     ]
 }
 ```
-
+Use the following command to send the example.json above to the Marathon REST API.
+```
+curl -i -H 'Content-Type: application/json' -d@example.json <marathon ip>:8080/v2/apps
+```
+Finally verify the ip address and network assigned to the container via the command
+```
+docker inspect unified-docker-task  
+```
 
 [![Analytics](https://ga-beacon.appspot.com/UA-52125893-3/calico-mesos-deployments/docs/CalicoWithTheDockerContainerizer.md?pixel)](https://github.com/igrigorik/ga-beacon)
